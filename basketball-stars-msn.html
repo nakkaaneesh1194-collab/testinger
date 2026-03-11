@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no"/>
+    <title>Basketball Stars</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+        #content { width: 100%; height: 100%; }
+        #loader { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); color: white; font-family: sans-serif; font-size: 24px; }
+    </style>
+</head>
+<body>
+<div id="content"></div>
+<div id="loader">Loading ...</div>
+<script>
+const BASE = "https://playgama.cdn.msnfun.com/9mvs56r5bjwj/v1/";
+const FONT_CSS = ['AllerDisplay.css','CfCrackBold.css','impact.css','impact2.css','impact3.css'];
+
+// Full logging proxy — logs EVERY property access on bridge
+function makeDeepProxy(obj, path) {
+    return new Proxy(obj, {
+        get(target, prop) {
+            if (prop === 'then' || prop === Symbol.toPrimitive || prop === Symbol.iterator || prop === Symbol.toStringTag) return target[prop];
+            const val = prop in target ? target[prop] : undefined;
+            if (typeof val === 'object' && val !== null) return makeDeepProxy(val, path + '.' + String(prop));
+            if (typeof val === 'function') {
+                return function(...args) {
+                    const r = val.apply(target, args);
+                    console.log('bridge' + path + '.' + String(prop) + '(' + args.map(a=>typeof a==='function'?'[fn]':JSON.stringify(a)).join(',') + ') =>', typeof r === 'object' && r && r.then ? '[Promise]' : r);
+                    return r;
+                };
+            }
+            console.log('bridge' + path + '.' + String(prop) + ' =>', val);
+            return val;
+        },
+        set(target, prop, val) {
+            console.log('bridge' + path + '.' + String(prop) + ' SET =', val);
+            target[prop] = val; return true;
+        }
+    });
+}
+
+const _bridgeImpl = {
+    initialize: function() { return Promise.resolve(window.playgamaBridge); },
+    isInitialized: true, version: '2.0.0',
+    on: function() {}, off: function() {},
+    game: { visibilityState:'visible', start:function(){return Promise.resolve();}, stop:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
+    advertisement: { isBannerSupported:false, isInterstitialSupported:false, isRewardedSupported:false, minimumDelayBetweenInterstitial:60, showInterstitial:function(){return Promise.resolve('dismissed');}, showRewarded:function(){return Promise.resolve('rewarded');}, showBanner:function(){return Promise.resolve();}, hideBanner:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
+    storage: { defaultType:'local_storage', isAvailable:function(){return Promise.resolve(true);}, get:function(k){try{return Promise.resolve(localStorage.getItem(k));}catch(e){return Promise.resolve(null);}}, set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}return Promise.resolve();}, delete:function(k){try{localStorage.removeItem(k);}catch(e){}return Promise.resolve();}, on:function(){}, off:function(){} },
+    platform: { id:'msn', language:navigator.language||'en', sdk:{}, payload:null, tld:null, hasInternet:true, on:function(){}, off:function(){} },
+    player: { isAuthorizationSupported:false, isAuthorized:false, id:null, name:'Player', photos:[], authorize:function(){return Promise.resolve();}, getDataFromStorage:function(){return Promise.resolve(null);}, setDataToStorage:function(){return Promise.resolve();}, deleteDataFromStorage:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
+    social: { isShareSupported:false, isInviteSupported:false, share:function(){return Promise.resolve();}, invite:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
+    leaderboards: { isSupported:false, setScore:function(){return Promise.resolve();}, getScore:function(){return Promise.resolve(0);}, getEntries:function(){return Promise.resolve([]);}, on:function(){}, off:function(){} },
+    payments: { isSupported:false, purchase:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
+};
+window.playgamaBridge = makeDeepProxy(_bridgeImpl, '');
+window.PlaygamaBridge = window.playgamaBridge;
+
+function fixUrl(val) {
+    if (typeof val !== 'string') return val;
+    if (val.indexOf('playgama.cdn.msnfun.com') !== -1) return val;
+    if (val.indexOf('blob:') === 0 || val.indexOf('data:') === 0) return val;
+    if (val.indexOf('http:') === 0 || val.indexOf('https:') === 0 || val.indexOf('//') === 0) return val;
+    let decoded = val;
+    try { decoded = decodeURIComponent(val); } catch(e) {}
+    if (decoded.indexOf('file:') === 0) {
+        const m = decoded.match(/\/(assets|js|json|images|sounds|img|media|css)\/.+$/);
+        if (m) return BASE + m[0].replace(/^\//, '');
+        const name = decoded.replace(/\\/g, '/').split('/').pop().split('?')[0];
+        return BASE + name;
+    }
+    return BASE + val;
+}
+
+// ── getContext patch for getImageData ──────────────────────────────────
+const _origGetCtx = HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext = function(type, opts) {
+    if (type === '2d') {
+        const ctx = _origGetCtx.call(this, type, opts);
+        if (ctx && !ctx._patched) {
+            ctx._patched = true;
+            const _origGID = ctx.getImageData.bind(ctx);
+            ctx.getImageData = function(...args) {
+                try {
+                    const result = _origGID(...args);
+                    if (result.width === 31 && result.height === 62) {
+                        // This is the data2.png config read — decode it
+                        const d = result.data;
+                        let chars = [];
+                        for (let i = 0; i < d.length; i += 4) {
+                            const r=d[i], g=d[i+1], b=d[i+2], a=d[i+3];
+                            if (r > 31) chars.push(r);
+                            if (g > 31) chars.push(g);
+                            if (b > 31) chars.push(b);
+                        }
+                        const decoded = chars.map(c => String.fromCharCode(c)).join('');
+                        console.log('data2 decoded (31x62):', decoded.slice(0, 1000));
+                    }
+                    return result;
+                } catch(e) {
+                    console.error('getImageData err:', e.message);
+                    return ctx.createImageData(args[2]||1, args[3]||1);
+                }
+            };
+        }
+        return ctx;
+    }
+    return _origGetCtx.call(this, type, opts);
+};
+
+// ── Fetch ──────────────────────────────────────────────────────────────
+const _origFetch = window.fetch;
+window.fetch = async function(url, opts) {
+    if (typeof url === 'string') {
+        const fixed = fixUrl(url);
+        if (fixed !== url) console.log('fetch:', url.slice(0,60), '->', fixed.slice(0,80));
+        url = fixed;
+    }
+    return _origFetch.call(this, url, opts);
+};
+
+// ── XHR ───────────────────────────────────────────────────────────────
+const _origXHROpen = XMLHttpRequest.prototype.open;
+const _origXHRSend = XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.open = function(method, url, ...args) {
+    if (typeof url === 'string') {
+        const fixed = fixUrl(url);
+        if (fixed !== url) console.log('XHR fixed:', url.slice(0,60));
+        else console.log('XHR open:', url.slice(0,60));
+        url = fixed;
+    }
+    this._xhrUrl = url;
+    return _origXHROpen.call(this, method, url, ...args);
+};
+XMLHttpRequest.prototype.send = function(...args) {
+    this.addEventListener('load', () => {
+        if (this.status !== 200) console.warn('XHR non-200:', this.status, String(this._xhrUrl).slice(0,60));
+        else console.log('XHR ok:', String(this._xhrUrl).slice(0,60));
+    });
+    this.addEventListener('error', () => console.error('XHR err:', String(this._xhrUrl).slice(0,60)));
+    return _origXHRSend.apply(this, args);
+};
+
+// ── Image src ─────────────────────────────────────────────────────────
+const _origImgSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+Object.defineProperty(HTMLImageElement.prototype, 'src', {
+    get() { return _origImgSrcDesc.get.call(this); },
+    set(val) {
+        const fixed = fixUrl(val);
+        // Only set crossOrigin for atlas/texture images, NOT data images read via getImageData
+        // Setting crossOrigin on data2.png causes it to fail if CDN doesn't send CORS headers
+        if (fixed !== val) {
+            const name = fixed.split('/').pop().split('?')[0];
+            const isDataImage = name === 'data2.png' || name === 'data.png';
+            if (!isDataImage) this.crossOrigin = 'anonymous';
+        }
+        if (!this._dbg) {
+            this._dbg = true;
+            this.addEventListener('error', () => console.error('IMG FAIL:', this.src && this.src.slice(0,80)));
+            this.addEventListener('load', () => console.log('IMG ok:', this.src && this.src.slice(0,80)));
+        }
+        _origImgSrcDesc.set.call(this, fixed);
+    },
+    configurable: true
+});
+
+// ── Script src ────────────────────────────────────────────────────────
+const _origSrcDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+    get() { return _origSrcDesc.get.call(this); },
+    set(val) {
+        // Skip bridge.playgama.com script tags — loaded via fetch+eval in init()
+        if (typeof val === 'string' && val.indexOf('bridge.playgama.com') !== -1) return;
+        _origSrcDesc.set.call(this, fixUrl(val));
+    },
+    configurable: true
+});
+
+// ── Link href ─────────────────────────────────────────────────────────
+const _origSetAttr = Element.prototype.setAttribute;
+Element.prototype.setAttribute = function(name, val) {
+    if (this.tagName === 'LINK' && name === 'href') {
+        return _origSetAttr.call(this, name, fixUrl(String(val)));
+    }
+    return _origSetAttr.call(this, name, val);
+};
+
+// ── Fonts ─────────────────────────────────────────────────────────────
+const fontStyle = document.createElement('style');
+fontStyle.textContent = `
+    @font-face { font-family: 'AllerDisplay'; src: local('Arial'); }
+    @font-face { font-family: 'Aller Display'; src: local('Arial'); }
+    @font-face { font-family: 'CfCrackBold'; src: local('Arial Black'); }
+    @font-face { font-family: 'Impact'; src: local('Impact'); }
+    @font-face { font-family: 'Impact2'; src: local('Impact'); }
+    @font-face { font-family: 'Impact3'; src: local('Impact'); }
+`;
+document.head.appendChild(fontStyle);
+if (document.fonts) {
+    document.fonts.check = function() { return true; };
+    document.fonts.load = function(font) { return Promise.resolve([{ family: font, status: 'loaded' }]); };
+    // Override fonts.ready — a real Promise that blocks if remote fonts can't load
+    try {
+        Object.defineProperty(document.fonts, 'ready', {
+            get: function() { return Promise.resolve(document.fonts); },
+            configurable: true
+        });
+    } catch(e) {}
+    // Also patch FontFace constructor to never actually fetch
+    const _OrigFontFace = window.FontFace;
+    window.FontFace = function(family, source, descriptors) {
+        const ff = new _OrigFontFace(family, source, descriptors);
+        ff.load = function() { return Promise.resolve(this); };
+        Object.defineProperty(ff, 'status', { get: () => 'loaded', configurable: true });
+        Object.defineProperty(ff, 'loaded', { get: () => Promise.resolve(this), configurable: true });
+        return ff;
+    };
+    window.FontFace.prototype = _OrigFontFace.prototype;
+}
+
+// ── MutationObserver ──────────────────────────────────────────────────
+new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+            if (node.nodeType !== 1) return;
+            if (node.tagName === 'LINK') {
+                const href = node.getAttribute('href') || '';
+                const name = href.split('/').pop().split('?')[0];
+                if (FONT_CSS.indexOf(name) !== -1)
+                    _origSetAttr.call(node, 'href', BASE + 'assets/css/' + name);
+            }
+        });
+    });
+}).observe(document.documentElement, { childList: true, subtree: true });
+
+// ── Script loader ─────────────────────────────────────────────────────
+const _origCE = document.createElement.bind(document);
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const s = _origCE('script');
+        _origSrcDesc.set.call(s, src);
+        s.onload = resolve;
+        s.onerror = (e) => { console.error('Script failed:', src.slice(0,80)); reject(e); };
+        document.head.appendChild(s);
+    });
+}
+
+async function init() {
+    // Load the real playgama bridge via fetch+eval before anything else
+    try {
+        const resp = await _origFetch(BASE + 'assets/lib/playgama-bridge.js');
+        if (resp.ok) {
+            const code = await resp.text();
+            eval(code); // eslint-disable-line no-eval
+            console.log('real bridge loaded, typeof playgamaBridge:', typeof window.playgamaBridge);
+            // Re-stub initialize if bridge doesn't know about our platform
+            if (window.playgamaBridge && typeof window.playgamaBridge.initialize === 'function') {
+                const _origInit = window.playgamaBridge.initialize.bind(window.playgamaBridge);
+                window.playgamaBridge.initialize = function(...args) {
+                    console.log('bridge.initialize called with args:', args.length);
+                    return _origInit(...args).then(r => { console.log('bridge.initialize resolved'); return r; })
+                        .catch(e => { console.warn('bridge.initialize failed:', e.message, '— using stub resolve'); return Promise.resolve(); });
+                };
+            }
+        }
+    } catch(e) {
+        console.warn('bridge load failed:', e.message, '— using stub');
+    }
+
+    await loadScript(BASE + 'assets/lib/nape.min.js');
+    console.log('nape ok');
+    await loadScript(BASE + 'assets/lib/phaser.min.js');
+    console.log('phaser ok');
+    await loadScript(BASE + 'assets/lib/phaser-cachebuster.min.js');
+    await loadScript(BASE + 'assets/lib/phaser-super-storage.min.js');
+    await loadScript(BASE + 'assets/lib/dragonBones.min.js');
+    console.log('deps ok');
+    await loadScript(BASE + 'basketball_legends_2019.min.js?51ca62bd285a9cdad643');
+    document.getElementById('loader').style.display = 'none';
+    console.log('Game loaded!');
+
+    // Simulate click to dismiss any "click to play" gating
+    function clickCanvas() {
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return;
+        ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t =>
+            canvas.dispatchEvent(new MouseEvent(t, {bubbles:true, cancelable:true, clientX:405, clientY:320}))
+        );
+    }
+    setTimeout(clickCanvas, 1500);
+    setTimeout(clickCanvas, 3000);
+    setTimeout(clickCanvas, 5000);
+}
+
+init().catch(e => console.error('Init failed:', e));
+</script>
+</body>
+</html>
