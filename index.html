@@ -19,6 +19,14 @@
 const BASE = "https://playgama.cdn.msnfun.com/9mvs56r5bjwj/v1/";
 const FONT_CSS = ['AllerDisplay.css','CfCrackBold.css','impact.css','impact2.css','impact3.css'];
 
+// Catch ALL errors including from game scripts
+window.addEventListener('error', function(e) {
+    console.error('GLOBAL ERROR:', e.message, '\n  at:', e.filename, e.lineno, e.colno, '\n  stack:', e.error && e.error.stack && e.error.stack.slice(0,300));
+});
+window.addEventListener('unhandledrejection', function(e) {
+    console.error('UNHANDLED PROMISE REJECTION:', e.reason && (e.reason.message || String(e.reason)));
+});
+
 // Full logging proxy — logs EVERY property access on bridge
 function makeDeepProxy(obj, path) {
     return new Proxy(obj, {
@@ -278,7 +286,24 @@ async function init() {
     await loadScript(BASE + 'assets/lib/phaser-super-storage.min.js');
     await loadScript(BASE + 'assets/lib/dragonBones.min.js');
     console.log('deps ok');
+    // Spy on timers BEFORE loading game to catch everything it registers
+    let _timerLog = 0;
+    const _origSI = window.setInterval;
+    const _origST = window.setTimeout;
+    window.setInterval = function(fn, delay, ...args) {
+        if (_timerLog++ < 30) console.log('setInterval(' + delay + '):', typeof fn === 'function' ? fn.toString().slice(0,120) : fn);
+        return _origSI(fn, delay, ...args);
+    };
+    window.setTimeout = function(fn, delay, ...args) {
+        if (_timerLog++ < 30) console.log('setTimeout(' + delay + '):', typeof fn === 'function' ? fn.toString().slice(0,120) : fn);
+        return _origST(fn, delay, ...args);
+    };
+
     await loadScript(BASE + 'basketball_legends_2019.min.js?51ca62bd285a9cdad643');
+
+    // Restore timer functions
+    window.setInterval = _origSI;
+    window.setTimeout = _origST;
     document.getElementById('loader').style.display = 'none';
     console.log('Game loaded!');
 
@@ -293,6 +318,14 @@ async function init() {
     setTimeout(clickCanvas, 1500);
     setTimeout(clickCanvas, 3000);
     setTimeout(clickCanvas, 5000);
+
+    // Diagnostic: intercept setInterval/setTimeout to see what the game polls
+    let _timerLog = 0;
+    const _origSI = window.setInterval;
+    window.setInterval = function(fn, delay, ...args) {
+        if (_timerLog++ < 20) console.log('setInterval:', delay, fn.toString().slice(0,80));
+        return _origSI(fn, delay, ...args);
+    };
 }
 
 init().catch(e => console.error('Init failed:', e));
