@@ -286,6 +286,15 @@ async function init() {
     await loadScript(BASE + 'assets/lib/phaser-super-storage.min.js');
     await loadScript(BASE + 'assets/lib/dragonBones.min.js');
     console.log('deps ok');
+    // Spy on rAF to see if game loop ever starts
+    let _rafCount = 0;
+    const _origRAF = window.requestAnimationFrame;
+    window.requestAnimationFrame = function(cb) {
+        _rafCount++;
+        if (_rafCount <= 5) console.log('rAF #' + _rafCount + ' registered');
+        return _origRAF(cb);
+    };
+
     // Spy on timers BEFORE loading game to catch everything it registers
     let _timerLog = 0;
     const _origSI = window.setInterval;
@@ -304,6 +313,18 @@ async function init() {
     // Restore timer functions
     window.setInterval = _origSI;
     window.setTimeout = _origST;
+    window.requestAnimationFrame = _origRAF;
+
+    console.log('Game loaded! rAF calls so far:', _rafCount);
+    console.log('window.Phaser:', typeof window.Phaser, window.Phaser && window.Phaser.VERSION);
+    // Check for game instance
+    setTimeout(() => {
+        console.log('rAF total after 2s:', _rafCount);
+        console.log('canvases:', document.querySelectorAll('canvas').length);
+        // Check content div
+        const c = document.getElementById('content');
+        console.log('content children:', c && c.children.length, c && c.innerHTML.slice(0,200));
+    }, 2000);
     document.getElementById('loader').style.display = 'none';
     console.log('Game loaded!');
 
