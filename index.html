@@ -168,19 +168,23 @@ XMLHttpRequest.prototype.send = function(...args) {
     return _origXHRSend.apply(this, args);
 };
 
-// ── Image src ─────────────────────────────────────────────────────────
+// ── Image: pre-set crossOrigin on ALL new img elements ────────────────
+// Phaser 2 sometimes sets src before crossOrigin — patch createElement
+// so every <img> is born with crossOrigin='anonymous' already set.
 const _origImgSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+const _origCreateElement = document.createElement.bind(document);
+document.createElement = function(tag, ...args) {
+    const el = _origCreateElement(tag, ...args);
+    if (typeof tag === 'string' && tag.toLowerCase() === 'img') {
+        el.crossOrigin = 'anonymous';
+    }
+    return el;
+};
 Object.defineProperty(HTMLImageElement.prototype, 'src', {
     get() { return _origImgSrcDesc.get.call(this); },
     set(val) {
+        this.crossOrigin = 'anonymous'; // always ensure it's set before load
         const fixed = fixUrl(val);
-        // Only set crossOrigin for atlas/texture images, NOT data images read via getImageData
-        // Setting crossOrigin on data2.png causes it to fail if CDN doesn't send CORS headers
-        if (fixed !== val) {
-            const name = fixed.split('/').pop().split('?')[0];
-            const isDataImage = name === 'data2.png' || name === 'data.png';
-            if (!isDataImage) this.crossOrigin = 'anonymous';
-        }
         if (!this._dbg) {
             this._dbg = true;
             this.addEventListener('error', () => console.error('IMG FAIL:', this.src && this.src.slice(0,80)));
@@ -190,6 +194,18 @@ Object.defineProperty(HTMLImageElement.prototype, 'src', {
     },
     configurable: true
 });
+
+// ── WebGL texImage2D: catch cross-origin SecurityError gracefully ──────
+// If a texture upload fails (shouldn't happen now but just in case),
+// swallow the error so the game loop keeps running.
+const _origTexImage2D = WebGLRenderingContext.prototype.texImage2D;
+WebGLRenderingContext.prototype.texImage2D = function(...args) {
+    try { return _origTexImage2D.apply(this, args); }
+    catch(e) {
+        if (e.name === 'SecurityError') console.warn('texImage2D SecurityError swallowed for:', args[5] && args[5].src && args[5].src.slice(0,60));
+        else throw e;
+    }
+};
 
 // ── Script src ────────────────────────────────────────────────────────
 const _origSrcDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
@@ -261,10 +277,9 @@ new MutationObserver(function(mutations) {
 }).observe(document.documentElement, { childList: true, subtree: true });
 
 // ── Script loader ─────────────────────────────────────────────────────
-const _origCE = document.createElement.bind(document);
 function loadScript(src) {
     return new Promise((resolve, reject) => {
-        const s = _origCE('script');
+        const s = _origCreateElement('script');
         _origSrcDesc.set.call(s, src);
         s.onload = resolve;
         s.onerror = (e) => { console.error('Script failed:', src.slice(0,80)); reject(e); };
