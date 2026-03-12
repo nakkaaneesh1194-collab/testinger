@@ -51,37 +51,70 @@ function makeDeepProxy(obj, path) {
     });
 }
 
+// Simple event emitter used by advertisement and other sub-objects
+function makeEmitter() {
+    const _listeners = {};
+    return {
+        on: function(event, fn) { (_listeners[event] = _listeners[event] || []).push(fn); },
+        off: function(event, fn) { if (_listeners[event]) _listeners[event] = _listeners[event].filter(f => f !== fn); },
+        _emit: function(event, ...args) { (_listeners[event] || []).forEach(fn => { try { fn(...args); } catch(e) {} }); }
+    };
+}
+
+const _advEmitter = makeEmitter();
+const _advertisement = Object.assign(_advEmitter, {
+    isBannerSupported: false, isInterstitialSupported: false, isRewardedSupported: false,
+    minimumDelayBetweenInterstitial: 0,
+    interstitialState: 'closed',
+    rewardedState: 'closed',
+    showBanner: function() { return Promise.resolve(); },
+    hideBanner: function() { return Promise.resolve(); },
+    // When showInterstitial is called, emit state changes: loading → closed
+    // The game listens for 'interstitialStateChanged' and checks interstitialState === 'closed'
+    showInterstitial: function() {
+        const self = this;
+        setTimeout(function() {
+            self.interstitialState = 'closed';
+            _advEmitter._emit('interstitialStateChanged', 'closed');
+        }, 50);
+        return Promise.resolve('dismissed');
+    },
+    showRewarded: function() {
+        const self = this;
+        setTimeout(function() {
+            self.rewardedState = 'closed';
+            _advEmitter._emit('rewardedStateChanged', 'closed');
+        }, 50);
+        return Promise.resolve('rewarded');
+    },
+});
+
 const _bridgeImpl = {
-    initialize: function() { return Promise.resolve(window.playgamaBridge); },
+    initialize: function() { return Promise.resolve(window.bridge); },
     isInitialized: true, version: '2.0.0',
-    EVENT_NAME: { INITIALIZED: 'initialized', INTERSTITIAL_STATE_CHANGED: 'interstitialStateChanged', REWARDED_STATE_CHANGED: 'rewardedStateChanged' },
+    EVENT_NAME: {
+        INITIALIZED: 'initialized',
+        INTERSTITIAL_STATE_CHANGED: 'interstitialStateChanged',
+        REWARDED_STATE_CHANGED: 'rewardedStateChanged',
+        BANNER_STATE_CHANGED: 'bannerStateChanged'
+    },
     on: function() {}, off: function() {},
     game: { visibilityState:'visible', start:function(){return Promise.resolve();}, stop:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
-    advertisement: { 
-        isBannerSupported:false, isInterstitialSupported:false, isRewardedSupported:false, 
-        minimumDelayBetweenInterstitial:60, 
-        interstitialState: 'closed',
-        rewardedState: 'closed',
-        showInterstitial:function(){return Promise.resolve('dismissed');}, 
-        showRewarded:function(){return Promise.resolve('rewarded');}, 
-        showBanner:function(){return Promise.resolve();}, 
-        hideBanner:function(){return Promise.resolve();}, 
-        on:function(){}, off:function(){} 
-    },
+    advertisement: _advertisement,
     storage: { defaultType:'local_storage', isAvailable:function(){return Promise.resolve(true);}, get:function(k){try{return Promise.resolve(localStorage.getItem(k));}catch(e){return Promise.resolve(null);}}, set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}return Promise.resolve();}, delete:function(k){try{localStorage.removeItem(k);}catch(e){}return Promise.resolve();}, on:function(){}, off:function(){} },
-    platform: { 
-        id:'msn', language:navigator.language||'en', sdk:{}, payload:null, tld:null, hasInternet:true, 
+    platform: {
+        id:'msn', language:navigator.language||'en', sdk:{}, payload:null, tld:null, hasInternet:true,
         sendMessage: function() { return Promise.resolve(); },
-        on:function(){}, off:function(){} 
+        on:function(){}, off:function(){}
     },
     player: { isAuthorizationSupported:false, isAuthorized:false, id:null, name:'Player', photos:[], authorize:function(){return Promise.resolve();}, getDataFromStorage:function(){return Promise.resolve(null);}, setDataToStorage:function(){return Promise.resolve();}, deleteDataFromStorage:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
     social: { isShareSupported:false, isInviteSupported:false, share:function(){return Promise.resolve();}, invite:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
     leaderboards: { isSupported:false, setScore:function(){return Promise.resolve();}, getScore:function(){return Promise.resolve(0);}, getEntries:function(){return Promise.resolve([]);}, on:function(){}, off:function(){} },
     payments: { isSupported:false, purchase:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
 };
-window.playgamaBridge = makeDeepProxy(_bridgeImpl, '');
-window.PlaygamaBridge = window.playgamaBridge;
-window.bridge = window.playgamaBridge; // ← game does: try { this.sdk = bridge } catch(t) {}
+window.bridge = _bridgeImpl;
+window.playgamaBridge = _bridgeImpl;
+window.PlaygamaBridge = _bridgeImpl;
 
 function fixUrl(val) {
     if (typeof val !== 'string') return val;
