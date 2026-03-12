@@ -66,6 +66,7 @@ const _bridgeImpl = {
 };
 window.playgamaBridge = makeDeepProxy(_bridgeImpl, '');
 window.PlaygamaBridge = window.playgamaBridge;
+window.bridge = window.playgamaBridge; // ← game does: try { this.sdk = bridge } catch(t) {}
 
 function fixUrl(val) {
     if (typeof val !== 'string') return val;
