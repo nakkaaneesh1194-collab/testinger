@@ -297,15 +297,15 @@ async function init() {
     };
 
     // Spy on timers BEFORE loading game to catch everything it registers
-    let _timerLog = 0;
+    let _timerLog2 = 0;
     const _origSI = window.setInterval;
     const _origST = window.setTimeout;
     window.setInterval = function(fn, delay, ...args) {
-        if (_timerLog++ < 30) console.log('setInterval(' + delay + '):', typeof fn === 'function' ? fn.toString().slice(0,120) : fn);
+        if (_timerLog2++ < 30) console.log('setInterval(' + delay + '):', typeof fn === 'function' ? fn.toString().slice(0,120) : fn);
         return _origSI(fn, delay, ...args);
     };
     window.setTimeout = function(fn, delay, ...args) {
-        if (_timerLog++ < 30) console.log('setTimeout(' + delay + '):', typeof fn === 'function' ? fn.toString().slice(0,120) : fn);
+        if (_timerLog2++ < 30) console.log('setTimeout(' + delay + '):', typeof fn === 'function' ? fn.toString().slice(0,120) : fn);
         return _origST(fn, delay, ...args);
     };
 
@@ -341,13 +341,6 @@ async function init() {
     setTimeout(clickCanvas, 3000);
     setTimeout(clickCanvas, 5000);
 
-    // Diagnostic: intercept setInterval/setTimeout to see what the game polls
-    let _timerLog = 0;
-    const _origSI = window.setInterval;
-    window.setInterval = function(fn, delay, ...args) {
-        if (_timerLog++ < 20) console.log('setInterval:', delay, fn.toString().slice(0,80));
-        return _origSI(fn, delay, ...args);
-    };
 }
 
 init().catch(e => console.error('Init failed:', e));
