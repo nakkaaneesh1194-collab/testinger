@@ -8,8 +8,8 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-        #content { width: 100%; height: 100%; }
-        #loader { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); color: white; font-family: sans-serif; font-size: 24px; }
+        #content { width: 100%; height: 100%; display: block; position: relative; }
+        #loader { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); color: white; font-family: sans-serif; font-size: 24px; z-index: 10; }
     </style>
 </head>
 <body>
@@ -54,11 +54,26 @@ function makeDeepProxy(obj, path) {
 const _bridgeImpl = {
     initialize: function() { return Promise.resolve(window.playgamaBridge); },
     isInitialized: true, version: '2.0.0',
+    EVENT_NAME: { INITIALIZED: 'initialized', INTERSTITIAL_STATE_CHANGED: 'interstitialStateChanged', REWARDED_STATE_CHANGED: 'rewardedStateChanged' },
     on: function() {}, off: function() {},
     game: { visibilityState:'visible', start:function(){return Promise.resolve();}, stop:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
-    advertisement: { isBannerSupported:false, isInterstitialSupported:false, isRewardedSupported:false, minimumDelayBetweenInterstitial:60, showInterstitial:function(){return Promise.resolve('dismissed');}, showRewarded:function(){return Promise.resolve('rewarded');}, showBanner:function(){return Promise.resolve();}, hideBanner:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
+    advertisement: { 
+        isBannerSupported:false, isInterstitialSupported:false, isRewardedSupported:false, 
+        minimumDelayBetweenInterstitial:60, 
+        interstitialState: 'closed',
+        rewardedState: 'closed',
+        showInterstitial:function(){return Promise.resolve('dismissed');}, 
+        showRewarded:function(){return Promise.resolve('rewarded');}, 
+        showBanner:function(){return Promise.resolve();}, 
+        hideBanner:function(){return Promise.resolve();}, 
+        on:function(){}, off:function(){} 
+    },
     storage: { defaultType:'local_storage', isAvailable:function(){return Promise.resolve(true);}, get:function(k){try{return Promise.resolve(localStorage.getItem(k));}catch(e){return Promise.resolve(null);}}, set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}return Promise.resolve();}, delete:function(k){try{localStorage.removeItem(k);}catch(e){}return Promise.resolve();}, on:function(){}, off:function(){} },
-    platform: { id:'msn', language:navigator.language||'en', sdk:{}, payload:null, tld:null, hasInternet:true, on:function(){}, off:function(){} },
+    platform: { 
+        id:'msn', language:navigator.language||'en', sdk:{}, payload:null, tld:null, hasInternet:true, 
+        sendMessage: function() { return Promise.resolve(); },
+        on:function(){}, off:function(){} 
+    },
     player: { isAuthorizationSupported:false, isAuthorized:false, id:null, name:'Player', photos:[], authorize:function(){return Promise.resolve();}, getDataFromStorage:function(){return Promise.resolve(null);}, setDataToStorage:function(){return Promise.resolve();}, deleteDataFromStorage:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
     social: { isShareSupported:false, isInviteSupported:false, share:function(){return Promise.resolve();}, invite:function(){return Promise.resolve();}, on:function(){}, off:function(){} },
     leaderboards: { isSupported:false, setScore:function(){return Promise.resolve();}, getScore:function(){return Promise.resolve(0);}, getEntries:function(){return Promise.resolve([]);}, on:function(){}, off:function(){} },
